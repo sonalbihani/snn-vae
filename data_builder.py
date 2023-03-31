@@ -5,11 +5,25 @@ import torchvision.datasets as datasets
 from torchvision.datasets import FashionMNIST, CelebA
 from autoaugment import Cutout
 import torch
+import gdown
+import zipfile
+
+
 
 ####################################################
 # data loader                                      #
 #                                                  #
 ####################################################
+class MyCelebA(CelebA):
+    """
+    A work-around to address issues with pytorch's celebA dataset class.
+    
+    Download and Extract
+    URL : https://drive.google.com/file/d/1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ/view?usp=sharing
+    """
+    
+    def _check_integrity(self) -> bool:
+        return True
 
 def build_data(dpath: str = None, batch_size=36, cutout=False, workers=1, auto_aug=False,
                dataset='CelebA', train_val_split=True):
@@ -30,7 +44,9 @@ def build_data(dpath: str = None, batch_size=36, cutout=False, workers=1, auto_a
         aug.append(Cutout(n_holes=1, length=16))
     test_dataset = None
     val_dataset = None
-
+    if dpath is None:
+        assert False, "Please input your dataset dir path via --dataset_path [dataset_dir] or " \
+                      "--train_dir [imagenet_train_dir] --val_dir [imagenet_train_dir]"
 
     if dataset == 'FashionMNIST':
         transform_train = transforms.Compose([
@@ -48,20 +64,30 @@ def build_data(dpath: str = None, batch_size=36, cutout=False, workers=1, auto_a
                                             train=False,
                                             transform=transform_test,
                                             download=True)
+        print(train_dataset)
 
     else:
-        aug.append(
-            transforms.Normalize(
-                (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
-        )
-        transform_train = transforms.Compose(aug)
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
-        ])
-        train_dataset = CelebA(root=dpath, train=True, download=True, transform=transform_train)
-        val_dataset = CelebA(root=dpath, train=False, download=True, transform=transform_test)
+        patch_size = 64
+        url = 'https://drive.google.com/uc?id=1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ'
+        output = 'celeba.zip'
+        gdown.download(url, output, quiet=False)   
+        with zipfile.ZipFile('/content/celeba.zip', 'r') as zip_ref:
+            zip_ref.extractall('/content/') 
+        with zipfile.ZipFile('/content/celeba/img_align_celeba.zip', 'r') as zip_ref:
+            zip_ref.extractall('/content/celeba') 
+        train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+                                      transforms.CenterCrop(148),
+                                      transforms.Resize(patch_size),
+                                      transforms.ToTensor(),])
+
+        val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+                                    transforms.CenterCrop(148),
+                                    transforms.Resize(patch_size),
+                                    transforms.ToTensor(),])
+        train_dataset = MyCelebA("/content", split='train', download=False, transform=train_transforms)
+        val_dataset = MyCelebA("/content", split='test', download=False, transform=val_transforms)
+        # train_dataset = CelebA(root=dpath, split='train', download=True, transform=transform_train)
+        # val_dataset = CelebA(root=dpath, split='test', download=True, transform=transform_test)
 
 
 

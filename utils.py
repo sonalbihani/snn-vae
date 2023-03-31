@@ -98,6 +98,28 @@ def get_parameters(model):
         params=group_no_weight_decay, weight_decay=0.)]
     return groups
 
+# def record_param(args, model, dict, epoch, modeltag, store=False):
+#     #store the dict
+#     if dict is None:
+#         return None
+#     if store:
+#         if not os.path.exists('./dicts_for_params'):
+#             os.mkdir('./dicts_for_params')
+#         np.save(os.path.join('./dicts_for_params', modeltag + '.npy'), dict)
+#     # elif (args.imagenet or args.fashion_mnist or args.mnist or args.cifar100):
+#     else:
+#         for pname, p in model.named_parameters():
+#             n = pname.split('.')
+#             if n[-1] in choice_param_name + lifcal_param_name:
+#                 if len(n) < 4:
+#                     continue
+#                 num_list = list(map(int, re.findall(r"\d+", pname)))
+#                 return num_list
+#                 if len(num_list) > 1:
+#                     layer = int(num_list[0]) * 2
+#                 else:
+#                     layer = int(num_list[0]) * 2 + 1
+#                 dict[n[-1]][layer].append(p.clone().detach().cpu().numpy())
 def record_param(args, model, dict, epoch, modeltag, store=False):
     #store the dict
     if dict is None:
@@ -120,6 +142,39 @@ def record_param(args, model, dict, epoch, modeltag, store=False):
                     layer = int(num_list[0]) * 2 + 1
                 dict[n[-1]][layer].append(p.clone().detach().cpu().numpy())
 
+def create_para_dict(args, model):
+    # create dict
+    para_dict = {}
+    layer_enc = 0
+    layer_dec = 0
+    for pname, p in model.named_parameters():
+        n = pname.split('.')
+        if n[-1] in choice_param_name + lifcal_param_name:
+            if(n[0] == 'encoder'):
+              if len(n) < 4:
+                  continue
+              num_list = list(map(int, re.findall(r"\d+", pname)))
+              if len(num_list) > 1:
+                  layer_enc = int(num_list[0]) * 2
+              else:
+                  layer_enc = int(num_list[0]) * 2 + 1
+            else:
+              if len(n) < 4:
+                  continue
+              num_list = list(map(int, re.findall(r"\d+", pname)))
+              if len(num_list) > 1:
+                  layer_dec = int(num_list[0]) * 2
+              else:
+                  layer_dec = int(num_list[0]) * 2 + 1
+            para_dict[n[-1]] = []
+    if (layer_enc is not None) and (layer_dec is not None):
+        for key in para_dict.keys():
+            para_dict[key] = [[] for i in range(layer_enc + layer_dec + 1)]
+    else:
+        return None
+
+    return para_dict
+
 def read_param(epoch, modeltag):
     if not os.path.exists(os.path.join('./dicts_for_params', modeltag + '.npy')):
         print('no checkpoint found, skip reading')
@@ -128,25 +183,26 @@ def read_param(epoch, modeltag):
 
     return a
 
-def create_para_dict(args, model):
-    # create dict
-    para_dict = {}
-    layer = None
-    for pname, p in model.named_parameters():
-        n = pname.split('.')
-        if n[-1] in choice_param_name + lifcal_param_name:
-            if len(n) < 4:
-                continue
-            num_list = list(map(int, re.findall(r"\d+", pname)))
-            if len(num_list) > 1:
-                layer = int(num_list[0]) * 2
-            else:
-                layer = int(num_list[0]) * 2 + 1
-            para_dict[n[-1]] = []
-    if layer is not None:
-        for key in para_dict.keys():
-            para_dict[key] = [[] for i in range(layer + 1)]
-    else:
-        return None
+# def create_para_dict(args, model):
+#     # create dict
+#     print("hi")
+#     para_dict = {}
+#     layer = None
+#     for pname, p in model.named_parameters():
+#         n = pname.split('.')
+#         if n[-1] in choice_param_name + lifcal_param_name:
+#             if len(n) < 4:
+#                 continue
+#             num_list = list(map(int, re.findall(r"\d+", pname)))
+#             if len(num_list) > 1:
+#                 layer = int(num_list[0]) * 2
+#             else:
+#                 layer = int(num_list[0]) * 2 + 1
+#             para_dict[n[-1]] = []
+#     if layer is not None:
+#         for key in para_dict.keys():
+#             para_dict[key] = [[] for i in range(layer + 1)]
+#     else:
+#         return None
 
-    return para_dict
+#     return para_dict

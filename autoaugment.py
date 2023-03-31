@@ -6,7 +6,7 @@ import torch
 
 
 class Cutout(object):
-    """Randomly mask out one or more patches from an image.
+    """Randomly mask out one or more patches from an image.Hey
     Args:
         n_holes (int): Number of patches to cut out of each image.
         length (int): The length (in pixels) of each square patch.

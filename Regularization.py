@@ -1,13 +1,16 @@
 import torch.nn as nn
 import torch
+from torch.nn import functional as F
 
-class Loss(nn.Module):
+
+class VAELoss(nn.Module):
     def __init__(self, args=None):
-        super(Loss, self).__init__()
-        self.param_loss = nn.CrossEntropyLoss()
-    def forward(self, output, target):
-        tloss = self.param_loss(output, target)
-        return tloss
+        super(VAELoss, self).__init__()
+        self.param_loss = nn.MSELoss()
+    def forward(self, means, log_variances, output, target):
+        KLD = torch.mean(-0.5 * torch.sum(1 + log_variances - means ** 2 - log_variances.exp(), dim = 1), dim = 0)
+        ReconstructionLoss = self.param_loss(output, target)
+        return ReconstructionLoss, KLD
 
 
 
