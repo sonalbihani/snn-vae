@@ -10,7 +10,7 @@ from layers import *
 
 
 class PosteriorBernoulliSTBP(nn.Module):
-    def __init__(self, lif_param, k=20, T = 3, latent_dim = 128) -> None:
+    def __init__(self, lif_param, lif_model, k=20, T = 3, latent_dim = 128) -> None:
         """
         modeling of q(z_t | x_<=t, z_<t)
         """
@@ -19,23 +19,24 @@ class PosteriorBernoulliSTBP(nn.Module):
         self.k = k
         self.n_steps = T
         self.lif_param = lif_param
+        self.lif_spike = lif_model
 
         self.layers = nn.Sequential(
             tdLinear(self.channels*2,
                     self.channels*2,
                     bias=True,
                     bn=tdBatchNorm(self.channels*2, alpha=2), 
-                    spike=LIFSpike_CW_Mod(self.channels*2, **self.lif_param)),
+                    spike=self.lif_spike(self.channels*2, **self.lif_param)),
             tdLinear(self.channels*2,
                     self.channels*4,
                     bias=True,
                     bn=tdBatchNorm(self.channels*4, alpha=2),
-                    spike=LIFSpike_CW_Mod(self.channels*4, **self.lif_param)),
+                    spike=self.lif_spike(self.channels*4, **self.lif_param)),
             tdLinear(self.channels*4,
                     self.channels*k,
                     bias=True,
                     bn=tdBatchNorm(self.channels*k, alpha=2),
-                    spike=LIFSpike_CW_Mod(self.channels*k, **self.lif_param))
+                    spike=self.lif_spike(self.channels*k, **self.lif_param))
         )
         self.register_buffer('initial_input', torch.zeros(1, self.channels, 1))# (1,C,1)
 

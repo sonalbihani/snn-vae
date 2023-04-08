@@ -189,7 +189,74 @@ class LIFSpike_CW_Mod(nn.Module):
         self.leak.copy_(- math.log(1 / kwargs['param'][2] - 1) * torch.ones(self.T, dtype=torch.float, device=self.leak.device))
         self.conduct.copy_(- math.log(1 / kwargs['param'][3] - 1) * torch.ones(self.T, dtype=torch.float, device=self.conduct.device))
 
+        
+class LIFSpike_CW_softsimple_mod(nn.Module):
+    '''
+        Coarsely fused LIF, referred to as GLIF_f in 'GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks'
+    '''
+    def __init__(self, inplace, **kwargs):
+        super(LIFSpike_CW_softsimple_mod, self).__init__()
+        self.T = kwargs['t']
+        self.soft_mode = kwargs['soft_mode']
+        self.static_gate = kwargs['static_gate']
+        self.static_param = kwargs['static_param']
+        self.time_wise = kwargs['time_wise']
+        self.plane = inplace
+        #c
+        self.gamma = nn.Parameter(- math.log(1 / ((kwargs['gate'][-1] - 0.5)*0.5+0.5) - 1) * torch.ones(self.plane, dtype=torch.float))
 
+        self.tau, self.Vth, self.leak = [nn.Parameter(- math.log(1 / i - 1) * torch.ones(self.plane, dtype=torch.float))
+                              for i in kwargs['param'][:-1]]
+        self.reVth = nn.Parameter(- math.log(1 / kwargs['param'][1] - 1) * torch.ones(self.plane, dtype=torch.float))
+        #t, c
+        self.conduct = [nn.Parameter(- math.log(1 / i - 1) * torch.ones((self.T, self.plane), dtype=torch.float))
+                                   for i in kwargs['param'][3:]][0]
+
+    def forward(self, x): #t, b, c, h, w
+        u = torch.zeros(x.shape[:-1], device=x.device)
+        out = torch.zeros(x.shape, device=x.device)
+        self.T = x.shape[-1]
+        for step in range(self.T):
+             u, out[..., step] = self.extended_state_update(u, out[..., max(step - 1, 0)], x[...,step],
+                                                      tau=self.tau.sigmoid(),
+                                                      Vth=self.Vth.sigmoid(),
+                                                      leak=self.leak.sigmoid(),
+                                                      conduct=self.conduct[step].sigmoid(),
+                                                      reVth=self.reVth.sigmoid())
+        return out
+
+    #[b, c, h, w]  * [c]
+    def extended_state_update(self, u_t_n1, o_t_n1, W_mul_o_t_n1, tau, Vth, leak, conduct, reVth):
+        if(u_t_n1.ndim > 2):
+            I_t1 = W_mul_o_t_n1 * conduct[None, :, None, None]
+            u_t1_n1 = ((tau[None, :, None, None]) * u_t_n1 * (1 - o_t_n1.clone()) - leak[None, :, None, None]) + \
+                      I_t1 - \
+                      reVth[None, :, None, None] * o_t_n1.clone()
+            o_t1_n1 = SpikeAct_extended.apply(u_t1_n1 - Vth[None, :, None, None])
+        else:
+            I_t1 = W_mul_o_t_n1 * conduct[None, :]
+            u_t1_n1 = ((tau[None, :]) * u_t_n1 * (1 - o_t_n1.clone()) - leak[None, :]) + \
+                      I_t1 - \
+                      reVth[None, :] * o_t_n1.clone()
+            o_t1_n1 = SpikeAct_extended.apply(u_t1_n1 - Vth[None, :])
+        return u_t1_n1, o_t1_n1
+
+    def _initialize_params(self, **kwargs):
+        self.mid_gate_mode = True
+        self.tau.copy_(torch.tensor(- math.log(1 / kwargs['param'][0] - 1), dtype=torch.float, device=self.tau.device))
+        self.Vth.copy_(torch.tensor(- math.log(1 / kwargs['param'][1] - 1), dtype=torch.float, device=self.Vth.device))
+        self.reVth.copy_(torch.tensor(- math.log(1 / kwargs['param'][1] - 1), dtype=torch.float, device=self.reVth.device))
+
+        self.leak.copy_(- math.log(1 / kwargs['param'][2] - 1) * torch.ones(self.T, dtype=torch.float, device=self.leak.device))
+        self.conduct.copy_(- math.log(1 / kwargs['param'][3] - 1) * torch.ones(self.T, dtype=torch.float, device=self.conduct.device))
+
+    def gumbel_on(self):
+        self.static_gate = False
+
+    def gumbel_off(self):
+        self.static_gate = True
+
+        
 class MembraneOutputLayer(nn.Module):
     """
     outputs the last time membrane potential of the LIF neuron with V_th=infty
