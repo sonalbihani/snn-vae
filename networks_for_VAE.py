@@ -388,6 +388,7 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
 
         self.latent_dim = latent_dim
         self.kld_weight = kld_weight_corrector
+        self.lif_model = LIFSpike_CW_Mod
 
         image_channels = in_channels
         modules = []
@@ -397,7 +398,7 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
                 tdConv(in_channels, out_channels=h_dim, kernel_size= 3, stride= 2, padding  = 1, 
                        bias=True,
                        bn=tdBatchNorm(h_dim),
-                       spike=LIFSpike_CW_Mod(h_dim, **self.lif_param),
+                       spike=self.lif_model(h_dim, **self.lif_param),
                        is_first_conv=is_first_conv)
             )
             in_channels = h_dim
@@ -408,11 +409,11 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
                                             latent_dim,
                                             bias=True,
                                             bn=tdBatchNorm(latent_dim),
-                                            spike=LIFSpike_CW_Mod(latent_dim, **self.lif_param))
+                                            spike=self.lif_model(latent_dim, **self.lif_param))
         
-        self.prior = PriorBernoulliSTBP(lif_param = self.lif_param, k = self.k, T = self.T)
+        self.prior = PriorBernoulliSTBP(lif_param = self.lif_param, k = self.k, T = self.T, lif_model = self.lif_model)
         
-        self.posterior = PosteriorBernoulliSTBP(lif_param = self.lif_param, k = self.k, T = self.T)
+        self.posterior = PosteriorBernoulliSTBP(lif_param = self.lif_param, k = self.k, T = self.T, lif_model = self.lif_model)
 
         # Build Decoder
         modules = []
@@ -421,7 +422,7 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
                                         hidden_dims[-1] * 4, 
                                         bias=True,
                                         bn=tdBatchNorm(hidden_dims[-1] * 4),
-                                        spike=LIFSpike_CW_Mod(hidden_dims[-1] * 4, **self.lif_param))
+                                        spike=self.lif_model(hidden_dims[-1] * 4, **self.lif_param))
 
         hidden_dims.reverse()
 
@@ -435,7 +436,7 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
                                     output_padding=1,
                                     bias=True,
                                     bn=tdBatchNorm(hidden_dims[i+1]),
-                                    spike=LIFSpike_CW_Mod(hidden_dims[i + 1], **self.lif_param))
+                                    spike=self.lif_model(hidden_dims[i + 1], **self.lif_param))
                 )
 
             
@@ -448,7 +449,7 @@ class DIPVAE_GLIF_Bernoulli(nn.Module):
                                             output_padding=1,
                                             bias=True,
                                             bn=tdBatchNorm(hidden_dims[-1]),
-                                            spike=LIFSpike_CW_Mod(hidden_dims[-1], **self.lif_param)),
+                                            spike=self.lif_model(hidden_dims[-1], **self.lif_param)),
                             tdConvTranspose(hidden_dims[-1], 
                                             out_channels=image_channels,
                                             kernel_size=3, 
